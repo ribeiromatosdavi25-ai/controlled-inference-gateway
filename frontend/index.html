@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controlled Inference Gateway</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    #budget-status {
+      background: #f0f0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 200px;
+      padding: 10px;
+      font-family: monospace;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      background: #e8f5e9;
+      border-radius: 5px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Code Review Sanitizer</h1>
+  
+  <div id="budget-status">
+    <strong>Daily Budget Status:</strong><br>
+    Remaining: $<span id="remaining">--</span> / $2.00<br>
+    <span id="budget-message"></span>
+  </div>
+
+  <textarea id="code" placeholder="Paste your code here..."></textarea>
+  
+  <button id="submit-btn" onclick="submitReview()">
+    Use Model (Cost: ~$<span id="estimated-cost">0.01</span>)
+  </button>
+
+  <div id="result" style="display: none;"></div>
+
+  <script>
+    const API_URL = 'http://localhost:3000';
+
+    async function updateBudgetStatus() {
+      try {
+        const res = await fetch(`${API_URL}/api/budget`);
+        const data = await res.json();
+        
+        document.getElementById('remaining').textContent = 
+          data.remaining.toFixed(2);
+        
+        const btn = document.getElementById('submit-btn');
+        if (data.blocked) {
+          btn.disabled = true;
+          document.getElementById('budget-message').textContent = 
+            '⚠️ Daily budget limit reached. Resets at midnight.';
+        }
+      } catch (err) {
+        console.error('Failed to fetch budget:', err);
+      }
+    }
+
+    async function submitReview() {
+      const code = document.getElementById('code').value;
+      
+      if (!code.trim()) {
+        alert('Please enter some code');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/api/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+
+        const data = await res.json();
+        
+        if (res.status === 429) {
+          alert('Budget exceeded: ' + data.error);
+        } else {
+          document.getElementById('result').style.display = 'block';
+          document.getElementById('result').textContent = 
+            JSON.stringify(data, null, 2);
+        }
+
+        await updateBudgetStatus();
+      } catch (err) {
+        alert('Request failed: ' + err.message);
+      }
+    }
+
+    // Update budget on load
+    updateBudgetStatus();
+  </script>
+</body>
+</html>
